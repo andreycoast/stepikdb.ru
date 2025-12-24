@@ -1,60 +1,57 @@
-package main
+package parser
 
 import (
 	"fmt"
-	"log"
+	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
-	"net/http"
 
 	"github.com/PuerkitoBio/goquery"
+	"stepikdb.ru/internal/models"
 )
 
-type Course struct {
-	Title		string
-	Description string
-	Price		int
-}
-
-func main() {
-	if err := runCourseParser(); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func runCourseParser() error {
-	url := "https://stepik.org/course/89381/promo"
-
+func ParseCourse(url string) (models.Course, error) {
 	resp, err := http.Get(url)
 	if err != nil {
-		return err
+		return models.Course{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP error: %d", resp.StatusCode)
+		return models.Course{}, fmt.Errorf("HTTP error: %d", resp.StatusCode)
 	}
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		return err
+		return models.Course{}, err
 	}
 
-	course := parseCourse(doc)
-
-	fmt.Println("Title:", course.Title)
-	fmt.Println("Description:", course.Description)
-	fmt.Println("Price:", course.Price)
-
-	return nil
-}
-
-func parseCourse(doc *goquery.Document) Course {
-	return Course {
+	course := models.Course{
+		CourseID:    parseCourseID(url),
 		Title:       parseTitle(doc),
 		Description: parseDescription(doc),
 		Price:       parsePrice(doc),
+		URL:         url,
 	}
+
+	return course, nil
+}
+
+func parseCourseID(url string) int {
+	courseIDRegex, _ := regexp.Compile(`https://stepik.org/course/(\\d+)`)
+
+	matches := courseIDRegex.FindStringSubmatch(url)
+	if len(matches) < 2 {
+		return 0
+	}
+
+	id, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return 0
+	}
+
+	return id
 }
 
 func parseTitle(doc *goquery.Document) string {
